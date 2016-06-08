@@ -52,8 +52,8 @@ DiPhotonFilter::passVertexCriteria(const reco::Vertex& vertex, const pat::Photon
   const reco::Candidate::Point vp1 = photon1.vertex(), vp2 = photon2.vertex(), vv = vertex.position();
   
   // FIXME overly simplified!!
-  if ((vp1-vv).mag2()>fMaxVertexDistance) return false;
-  if ((vp2-vv).mag2()>fMaxVertexDistance) return false;
+  if (std::sqrt((vp1-vv).mag2())>fMaxVertexDistance) return false;
+  if (std::sqrt((vp2-vv).mag2())>fMaxVertexDistance) return false;
 
   return true;
 }

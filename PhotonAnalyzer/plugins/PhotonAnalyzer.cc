@@ -12,7 +12,7 @@
 */
 //
 // Original Author:  Laurent Forthomme
-//         Created:  Sun, 29 May 2016 19:05:16 GMT
+//         Created:  Sun, 22 May 2016 19:05:16 GMT
 //
 //
 
@@ -23,10 +23,10 @@
 //
 PhotonAnalyzer::PhotonAnalyzer(const edm::ParameterSet& iConfig) :
   fPhotonToken(consumes< edm::View<pat::Photon> >(iConfig.getParameter<edm::InputTag>("photonTag"))),
+  fConversionToken(consumes< edm::View<reco::Conversion> >(iConfig.getParameter<edm::InputTag("conversionTag")>)),
   //fBeamSpotToken(consumes< edm::View<reco::BeamSpot> >(iConfig.getParameter<edm::InputTag>("beamspotTag")))
   fTree(0)
 {
-  //now do what ever initialization is needed
   usesResource("TFileService");
   edm::Service<TFileService> fs;
 
@@ -37,12 +37,7 @@ PhotonAnalyzer::PhotonAnalyzer(const edm::ParameterSet& iConfig) :
 
 
 PhotonAnalyzer::~PhotonAnalyzer()
-{
- 
-   // do anything here that needs to be done at desctruction time
-   // (e.g. close files, deallocate resources etc.)
-
-}
+{}
 
 
 // ------------ method called for each event  ------------
@@ -52,12 +47,18 @@ PhotonAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   edm::Handle< edm::View<pat::Photon> > photons;
   iEvent.getByToken(fPhotonToken, photons);
 
+  edm::Handle< edm::View<reco::Conversion> > conversions;
+  iEvent.getByToken(fConversionToken, conversions);
+
   /*edm::Handle< edm::View<reco::Vertex> > vertices;
   iEvent.getByToken(fVertexToken, vertices);*/
+
+  TLorentzVector ph1, ph2;
  
   unsigned int i=0, j=0;
   for (edm::View<pat::Photon>::const_iterator photon=photons->begin(); photon!=photons->end(); photon++) {
-    //if (!passElectronId())
+    if (!passPhotonId(*photon)) continue;
+
     aPhotonPt[i] = photon->pt();
     aPhotonEta[i] = photon->eta();
     aPhotonPhi[i] = photon->phi();
@@ -65,10 +66,23 @@ PhotonAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     aPhotonVtxY[i] = photon->vy();
     aPhotonVtxZ[i] = photon->vz();
 
+    ph1.SetPxPyPzE(photon->p4().px(), photon->p4().py(), photon->p4().pz(), photon->p4().E());
+
     for (edm::View<pat::Photon>::const_iterator photon2=photon+1; photon2!=photons->end(); photon2++) {
-      const reco::Candidate::LorentzVector ppair = photon->p4()+photon2->p4();
-      aPhotonPairMass[j] = ppair.mass();
-      aPhotonPairPt[j] = ppair.pt();
+      if (!passPhotonId(*photon2)) continue;
+
+      ph2.SetPxPyPzE(photon2->p4().px(), photon2->p4().py(), photon2->p4().pz(), photon2->p4().E());
+      const TLorentzVector photon_pair = ph1+ph2;
+      double dphi = fabs(ph1.Phi()-ph2.Phi());
+
+      //aPhotonPairVertexDist[j] = std::sqrt((photon->vertex()-photon2->vertex()).mag2());
+      aPhotonPairVertexDist[j] = std::sqrt(pow(photon->vx()-photon2->vx(), 2)+
+                                           pow(photon->vy()-photon2->vy(), 2)+
+                                           pow(photon->vz()-photon2->vz(), 2));
+      aPhotonPairDphi[j] = (dphi<TMath::Pi()) ? dphi : 2.*TMath::Pi()-dphi; // dphi lies in [-pi, pi]
+      aPhotonPairDpt[j] = fabs(ph1.Pt()-ph2.Pt());
+      aPhotonPairMass[j] = photon_pair.M();
+      aPhotonPairPt[j] = photon_pair.Pt();
       j++;
     }
 
@@ -85,6 +99,12 @@ PhotonAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
 }
 
+bool
+PhotonAnalyzer::passPhotonId(const pat::Photon& photon) const
+{
+  return true;
+}
+
 
 // ------------ method called once each job just before starting event loop  ------------
 void 
@@ -98,8 +118,12 @@ PhotonAnalyzer::beginJob()
   fTree->Branch("photon_vtxy", aPhotonVtxY, "photon_vtxy[num_photons]/D");
   fTree->Branch("photon_vtxz", aPhotonVtxZ, "photon_vtxz[num_photons]/D");
   fTree->Branch("num_photonpairs", &aNumPhotonPairs, "num_photonpairs/I");
+  fTree->Branch("photonpair_vertex_dist", aPhotonPairVertexDist, "photonpair_vertex_dist[num_photonpairs]/D");
   fTree->Branch("photonpair_mass", aPhotonPairMass, "photonpair_mass[num_photonpairs]/D");
   fTree->Branch("photonpair_pt", aPhotonPairPt, "photonpair_pt[num_photonpairs]/D");
+  fTree->Branch("photonpair_dphi", aPhotonPairDphi, "photonpair_dphi[num_photonpairs]/D");
+  fTree->Branch("photonpair_dpt", aPhotonPairDpt, "photonpair_dpt[num_photonpairs]/D");
+  
 }
 
 // ------------ method called once each job just after ending the event loop  ------------
@@ -117,6 +141,3 @@ PhotonAnalyzer::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
   desc.setUnknown();
   descriptions.addDefault(desc);
 }
-
-//define this as a plug-in
-//DEFINE_FWK_MODULE(PhotonAnalyzer);

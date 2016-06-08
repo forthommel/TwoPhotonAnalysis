@@ -30,11 +30,13 @@
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 
 #include "DataFormats/PatCandidates/interface/Photon.h"
+#include "DataFormats/EgammaCandidates/interface/Conversion.h"
 
 #include "FWCore/ServiceRegistry/interface/Service.h"
 #include "CommonTools/UtilAlgos/interface/TFileService.h"
 
 #include "TTree.h"
+#include "TLorentzVector.h"
 
 #define MAX_PHOTONS 100
 #define MAX_PHOTON_PAIRS 100
@@ -52,8 +54,10 @@ class PhotonAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
       virtual void analyze(const edm::Event&, const edm::EventSetup&) override;
       virtual void endJob() override;
 
-      // ----------member data ---------------------------
+      bool passPhotonId(const pat::Photon& photon) const;
+
       edm::EDGetTokenT< edm::View<pat::Photon> > fPhotonToken;
+      edm::EDGetTokenT< edm::View<reco::Conversion> > fConversionToken;
       //edm::EDGetTokenT< reco::BeamSpot > fBeamSpotToken;
       //edm::EDGetTokenT< edm::View<reco::Vertex> > fVertexToken;
       
@@ -68,8 +72,11 @@ class PhotonAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
       double aPhotonVtxZ[MAX_PHOTONS];
 
       int aNumPhotonPairs;
+      double aPhotonPairVertexDist[MAX_PHOTON_PAIRS];
       double aPhotonPairMass[MAX_PHOTON_PAIRS];
       double aPhotonPairPt[MAX_PHOTON_PAIRS];
+      double aPhotonPairDpt[MAX_PHOTON_PAIRS];
+      double aPhotonPairDphi[MAX_PHOTON_PAIRS];
 };
 
 //define this as a plug-in
