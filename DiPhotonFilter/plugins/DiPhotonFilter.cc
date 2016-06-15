@@ -83,7 +83,7 @@ DiPhotonFilter::filter(edm::Event& iEvent, const edm::EventSetup& iSetup)
     return false;
   }
   if (!photons->size()) {
-    edm::LogError("DiPhotonFilter") << "Photon collection is empty!";
+    //edm::LogError("DiPhotonFilter") << "Photon collection is empty!";
     return false;
   }
 

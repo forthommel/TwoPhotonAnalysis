@@ -2,7 +2,9 @@
 <use name="FWCore/PluginManager"/>
 <use name="FWCore/ParameterSet"/>
 <use name="DataFormats/PatCandidates"/>
+<use name="DataFormats/Common"/>
 <use name="CommonTools/UtilAlgos"/>
 <use name="CommonTools/Utils"/>
+<use name="TwoPhoton/PhotonAnalyzer"/>
 <use name="root"/>
 <flags EDM_PLUGIN="1"/>

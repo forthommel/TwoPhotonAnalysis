@@ -30,10 +30,17 @@
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 
 #include "DataFormats/PatCandidates/interface/Photon.h"
+#include "DataFormats/PatCandidates/interface/PackedCandidate.h"
 #include "DataFormats/EgammaCandidates/interface/Conversion.h"
+#include "DataFormats/VertexReco/interface/Vertex.h"
 
 #include "FWCore/ServiceRegistry/interface/Service.h"
 #include "CommonTools/UtilAlgos/interface/TFileService.h"
+
+//#include "TwoPhoton/PhotonAnalyzer/interface/VertexFinder.h"
+//
+#include "DataFormats/Common/interface/ValueMap.h"
+#include "DataFormats/PatCandidates/interface/VIDCutFlowResult.h"
 
 #include "TTree.h"
 #include "TLorentzVector.h"
@@ -54,14 +61,29 @@ class PhotonAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
       virtual void analyze(const edm::Event&, const edm::EventSetup&) override;
       virtual void endJob() override;
 
-      bool passPhotonId(const pat::Photon& photon) const;
+      bool passPhotonId(const edm::Ptr< pat::Photon >& photon_ref) const;
 
       edm::EDGetTokenT< edm::View<pat::Photon> > fPhotonToken;
       edm::EDGetTokenT< edm::View<reco::Conversion> > fConversionToken;
+      edm::EDGetTokenT< edm::View<pat::PackedCandidate> > fPFCandidateToken;
+      edm::EDGetTokenT< edm::View<reco::Vertex> > fVertexToken;
+      edm::EDGetTokenT< edm::ValueMap<bool> > fPhotonMediumIdBoolMapToken;
+      edm::EDGetTokenT< edm::ValueMap<vid::CutFlowResult> > fPhotonMediumIdFullInfoMapToken;
+      
+      // The first map simply has pass/fail for each particle
+      edm::Handle< edm::ValueMap<bool> > fPhotonMediumIdDecisions;
+      // The second map has the full info about the cut flow
+      edm::Handle< edm::ValueMap<vid::CutFlowResult> > fPhotonMediumIdCutflowData;
+
       //edm::EDGetTokenT< reco::BeamSpot > fBeamSpotToken;
-      //edm::EDGetTokenT< edm::View<reco::Vertex> > fVertexToken;
       
       TTree* fTree;
+
+      //VertexFinder fVertexFinder;
+      //
+      int aRunId;
+      int aLSId;
+      int aEventId;
 
       int aNumPhotons;
       double aPhotonPt[MAX_PHOTONS];

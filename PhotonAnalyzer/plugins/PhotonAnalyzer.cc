@@ -23,8 +23,16 @@
 //
 PhotonAnalyzer::PhotonAnalyzer(const edm::ParameterSet& iConfig) :
   fPhotonToken(consumes< edm::View<pat::Photon> >(iConfig.getParameter<edm::InputTag>("photonTag"))),
-  fConversionToken(consumes< edm::View<reco::Conversion> >(iConfig.getParameter<edm::InputTag("conversionTag")>)),
-  //fBeamSpotToken(consumes< edm::View<reco::BeamSpot> >(iConfig.getParameter<edm::InputTag>("beamspotTag")))
+  fConversionToken(consumes< edm::View<reco::Conversion> >(iConfig.getParameter<edm::InputTag>("conversionTag"))),
+  fPFCandidateToken(consumes< edm::View<pat::PackedCandidate> >(iConfig.getParameter<edm::InputTag>("pfCandidateTag"))),
+  fVertexToken(consumes< edm::View<reco::Vertex> >(iConfig.getParameter<edm::InputTag>("vertexTag"))),
+  //fBeamSpotToken(consumes< edm::View<reco::BeamSpot> >(iConfig.getParameter<edm::InputTag>("beamspotTag"))),
+  fPhotonMediumIdBoolMapToken(consumes< edm::ValueMap<bool> >(
+    iConfig.getUntrackedParameter<edm::InputTag>("photonMedIdBoolMapTag", edm::InputTag("egmPhotonIDs:mvaPhoID-PHYS14-PU20bx25-nonTrig-V1-wp90"))
+  )),
+  fPhotonMediumIdFullInfoMapToken(consumes< edm::ValueMap< vid::CutFlowResult > >(
+    iConfig.getUntrackedParameter<edm::InputTag>("photonMedIdInfoMapTag", edm::InputTag("egmPhotonIDs:mvaPhoID-PHYS14-PU20bx25-nonTrig-V1-wp90"))
+  )),
   fTree(0)
 {
   usesResource("TFileService");
@@ -50,35 +58,59 @@ PhotonAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   edm::Handle< edm::View<reco::Conversion> > conversions;
   iEvent.getByToken(fConversionToken, conversions);
 
-  /*edm::Handle< edm::View<reco::Vertex> > vertices;
-  iEvent.getByToken(fVertexToken, vertices);*/
+  edm::Handle< edm::View<pat::PackedCandidate> > pfcandidates;
+  iEvent.getByToken(fPFCandidateToken, pfcandidates);
+
+  edm::Handle< edm::View<reco::Vertex> > vertices;
+  iEvent.getByToken(fVertexToken, vertices);
+
+  // The first map simply has pass/fail for each particle
+  iEvent.getByToken(fPhotonMediumIdBoolMapToken, fPhotonMediumIdDecisions);
+  // The second map has the full info about the cut flow
+  iEvent.getByToken(fPhotonMediumIdFullInfoMapToken, fPhotonMediumIdCutflowData);
+
+  // Get MVA values and categories (optional)
+  /*edm::Handle<edm::ValueMap<float> > mvaValues;
+  iEvent.getByToken(mvaValuesMapToken_,mvaValues);
+  edm::Handle<edm::ValueMap<int> > mvaCategories;
+  iEvent.getByToken(mvaCategoriesMapToken_,mvaCategories);*/
+
+  //fVertexFinder.SetEventHandles(conversions, pfcandidates, vertices);
 
   TLorentzVector ph1, ph2;
  
+  aRunId = iEvent.id().run();
+  aLSId = iEvent.id().luminosityBlock();
+  aEventId = iEvent.id().event();
+
   unsigned int i=0, j=0;
-  for (edm::View<pat::Photon>::const_iterator photon=photons->begin(); photon!=photons->end(); photon++) {
-    if (!passPhotonId(*photon)) continue;
+  for (std::vector< edm::Ptr<pat::Photon> >::const_iterator photon1_ptr=photons->ptrs().begin(); photon1_ptr!=photons->ptrs().end(); photon1_ptr++) {
+    const edm::Ptr<pat::Photon> photon1 = *photon1_ptr;
+    if (!passPhotonId(photon1)) continue;
+    
+    aPhotonPt[i] = photon1->pt();
+    aPhotonEta[i] = photon1->eta();
+    aPhotonPhi[i] = photon1->phi();
+    aPhotonVtxX[i] = photon1->vx();
+    aPhotonVtxY[i] = photon1->vy();
+    aPhotonVtxZ[i] = photon1->vz();
 
-    aPhotonPt[i] = photon->pt();
-    aPhotonEta[i] = photon->eta();
-    aPhotonPhi[i] = photon->phi();
-    aPhotonVtxX[i] = photon->vx();
-    aPhotonVtxY[i] = photon->vy();
-    aPhotonVtxZ[i] = photon->vz();
+    ph1.SetPxPyPzE(photon1->p4().px(), photon1->p4().py(), photon1->p4().pz(), photon1->p4().E());
 
-    ph1.SetPxPyPzE(photon->p4().px(), photon->p4().py(), photon->p4().pz(), photon->p4().E());
+    for (std::vector< edm::Ptr<pat::Photon> >::const_iterator photon2_ptr=photon1_ptr+1; photon2_ptr!=photons->ptrs().end(); photon2_ptr++) {
+      const edm::Ptr<pat::Photon> photon2 = *photon2_ptr;
+      if (!passPhotonId(photon2)) continue;
 
-    for (edm::View<pat::Photon>::const_iterator photon2=photon+1; photon2!=photons->end(); photon2++) {
-      if (!passPhotonId(*photon2)) continue;
+      //reco::Vertex vtx_matched = fVertexFinder.FindVertex(*photon, *photon2);
 
       ph2.SetPxPyPzE(photon2->p4().px(), photon2->p4().py(), photon2->p4().pz(), photon2->p4().E());
       const TLorentzVector photon_pair = ph1+ph2;
       double dphi = fabs(ph1.Phi()-ph2.Phi());
 
       //aPhotonPairVertexDist[j] = std::sqrt((photon->vertex()-photon2->vertex()).mag2());
-      aPhotonPairVertexDist[j] = std::sqrt(pow(photon->vx()-photon2->vx(), 2)+
-                                           pow(photon->vy()-photon2->vy(), 2)+
-                                           pow(photon->vz()-photon2->vz(), 2));
+      aPhotonPairVertexDist[j] = std::sqrt(pow(photon1->vx()-photon2->vx(), 2)+
+                                           pow(photon1->vy()-photon2->vy(), 2)+
+                                           pow(photon1->vz()-photon2->vz(), 2));
       aPhotonPairDphi[j] = (dphi<TMath::Pi()) ? dphi : 2.*TMath::Pi()-dphi; // dphi lies in [-pi, pi]
       aPhotonPairDpt[j] = fabs(ph1.Pt()-ph2.Pt());
       aPhotonPairMass[j] = photon_pair.M();
@@ -100,9 +132,11 @@ PhotonAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 }
 
 bool
-PhotonAnalyzer::passPhotonId(const pat::Photon& photon) const
+PhotonAnalyzer::passPhotonId(const edm::Ptr< pat::Photon >& photon_ref) const
 {
-  return true;
+  const bool pass_medium = (*fPhotonMediumIdDecisions)[photon_ref];
+
+  return pass_medium;
 }
 
 
